@@ -63,6 +63,7 @@ npm start          # 启动应用（Electron）
 
 ```bash
 npm run dist       # electron-packager 打包 → dist\MJMJ-win32-x64\MJMJ.exe
+npm run portable   # electron-builder 打包单文件便携版 → release\MJMJ-Portable-<ver>.exe（双击即用，免安装）
 npm run setup      # electron-builder 打包 NSIS 安装包 → release\MJMJ-Setup-<ver>.exe（向导式，可选安装位置）
 ```
 

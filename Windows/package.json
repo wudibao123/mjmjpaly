@@ -10,7 +10,8 @@
     "start": "electron .",
     "icon": "electron scripts/render-icon.js && node scripts/make-ico.js",
     "dist": "electron-packager . MJMJ --platform=win32 --arch=x64 --out=dist --icon=assets/icon/mjmj.ico --overwrite --asar --ignore=\"assets/verify\" --ignore=\"scripts\" --ignore=\"smoke.json\" --ignore=\"package-lock.json\"",
-    "setup": "electron-builder --win nsis"
+    "setup": "electron-builder --win nsis",
+    "portable": "electron-builder --win portable"
   },
   "build": {
     "appId": "com.mjmj.player",
@@ -35,8 +36,17 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
         }
       ]
+    },
+    "portable": {
+      "artifactName": "MJMJ-Portable-${version}.exe"
     },
     "nsis": {
       "oneClick": false,
