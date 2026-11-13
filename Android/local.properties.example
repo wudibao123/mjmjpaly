@@ -1,0 +1,9 @@
+# 复制为 local.properties 后填写，本文件不会进版本库
+# Android SDK 位置
+sdk.dir=C\:\\Users\\<user>\\AppData\\Local\\Android\\Sdk
+
+# 发布签名（可选，不填则 release 为未签名构建）
+MJMJ_STORE_FILE=C\:\\path\\to\\mjmj-release.jks
+MJMJ_STORE_PASSWORD=
+MJMJ_KEY_ALIAS=mjmj
+MJMJ_KEY_PASSWORD=

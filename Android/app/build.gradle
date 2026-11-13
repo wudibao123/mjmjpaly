@@ -1,0 +1,59 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 签名配置从 android/local.properties 读取（该文件不进版本库）。
+// 未配置时 release 为未签名构建；要发布请自行生成 keystore 后写入：
+//   MJMJ_STORE_FILE=绝对路径/your-release.jks
+//   MJMJ_STORE_PASSWORD=keystore 密码
+//   MJMJ_KEY_ALIAS=密钥别名
+//   MJMJ_KEY_PASSWORD=密钥密码
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+def mjmjStoreFile = localProps.getProperty('MJMJ_STORE_FILE')
+
+android {
+    namespace 'com.mjmj.player'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.mjmj.player"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        release {
+            if (mjmjStoreFile) {
+                storeFile file(mjmjStoreFile)
+                storePassword localProps.getProperty('MJMJ_STORE_PASSWORD')
+                keyAlias localProps.getProperty('MJMJ_KEY_ALIAS')
+                keyPassword localProps.getProperty('MJMJ_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (mjmjStoreFile) {
+                signingConfig signingConfigs.release
+            }
+        }
+        debug {
+            if (mjmjStoreFile) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

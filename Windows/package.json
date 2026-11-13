@@ -1,0 +1,76 @@
+{
+  "name": "mjmj",
+  "productName": "MJMJ",
+  "version": "1.0.0",
+  "description": "MJMJ —— 音乐播放器（网易云接入，扫码/Cookie 登录，节奏响应背景）",
+  "main": "main.js",
+  "author": "MJMJ",
+  "license": "GPL-3.0",
+  "scripts": {
+    "start": "electron .",
+    "icon": "electron scripts/render-icon.js && node scripts/make-ico.js",
+    "dist": "electron-packager . MJMJ --platform=win32 --arch=x64 --out=dist --icon=assets/icon/mjmj.ico --overwrite --asar --ignore=\"assets/verify\" --ignore=\"scripts\" --ignore=\"smoke.json\" --ignore=\"package-lock.json\"",
+    "setup": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.mjmj.player",
+    "productName": "MJMJ",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "server/**/*",
+      "renderer/**/*",
+      "assets/icon/**/*",
+      "assets/default-bg.png",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/icon/mjmj.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MJMJ",
+      "installerLanguages": [
+        "zh_CN"
+      ],
+      "include": "build/installer.nsh",
+      "artifactName": "MJMJ-Setup-${version}.exe"
+    },
+    "extraResources": [
+      {
+        "from": "cli",
+        "to": "cli"
+      }
+    ],
+    "electronDownload": {
+      "cache": "node_modules/electron/dist"
+    },
+    "electronDist": "node_modules/electron/dist"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "NeteaseCloudMusicApi": "^4.32.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "^45.2.2",
+    "electron-builder": "^26.18.0",
+    "electron-packager": "^17.1.2",
+    "png-to-ico": "^3.0.2"
+  }
+}

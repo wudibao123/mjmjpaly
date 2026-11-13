@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101A30"/>
+      <stop offset="0.5" stop-color="#151F3A"/>
+      <stop offset="1" stop-color="#0A1120"/>
+    </linearGradient>
+    <linearGradient id="markGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#60A5FA"/>
+      <stop offset="0.55" stop-color="#C084FC"/>
+      <stop offset="1" stop-color="#F472B6"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.30" cy="0.22" r="0.9">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx="0.5" cy="0.95" r="0.9">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.34"/>
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+    </filter>
+  </defs>
+
+  <!-- 圆形底（圆外透明） -->
+  <circle cx="256" cy="256" r="256" fill="url(#bgGrad)"/>
+  <circle cx="256" cy="256" r="256" fill="url(#sheen)"/>
+  <circle cx="256" cy="256" r="256" fill="url(#vignette)"/>
+
+  <!-- MJ 融合字标：M 右腿 = J 竖干，向下延续成 J 钩 -->
+  <g transform="translate(2,12)">
+    <path d="M 157 332 L 157 79 L 258 332 L 359 79 L 359 402 C 359 453 313 460 290 433"
+          fill="none" stroke="#000000" stroke-opacity="0.40" stroke-width="60"
+          stroke-linecap="round" stroke-linejoin="round" filter="url(#softShadow)"/>
+  </g>
+  <path d="M 157 332 L 157 79 L 258 332 L 359 79 L 359 402 C 359 453 313 460 290 433"
+        fill="none" stroke="url(#markGrad)" stroke-width="52"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
