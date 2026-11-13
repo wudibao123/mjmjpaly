@@ -297,10 +297,31 @@
     return legacy;
   };
 
+  /* 逐字歌词：走 /lyric/new（NeteaseCloudMusicApi 的 lyric_new → /api/song/lyric/v1，
+     请求体里 yv/ytv/yrv 就是逐字正文、逐字译文、逐字罗马音的开关）。
+     yrc 每字自带 <起始ms,时长ms,0>，这才是 Folia 那种“念白慢、高亮也跟着慢”的数据来源；
+     老 /lyric 只有行级时间，拿它做卡拉OK只能按行均分，必然算歪。 */
   NCM.lyric = async function (id) {
-    const j = await NCM.get('/lyric', { id });
-    if (j.code === 200 && j.lrc && j.lrc.lyric) return j.lrc.lyric;
-    return '';
+    let j = null;
+    try { j = await NCM.get('/lyric/new', { id, yv: 1, ytv: 1 }); } catch (e) { console.warn('lyric/new failed', e); }
+    if (j && j.code === 200) {
+      const lyricOf = (o) => (o && o.lyric) || '';
+      const yrc = lyricOf(j.yrc) || (j.lrc && j.lrc.yrc && lyricOf(j.lrc.yrc)) || '';
+      const lrc = lyricOf(j.lrc) || '';
+      const ytlrc = lyricOf(j.ytlrc) || (j.lrc && j.lrc.ytlrc && lyricOf(j.lrc.ytlrc)) || '';
+      const tlrc = lyricOf(j.tlyric) || '';
+      if (yrc || lrc) {
+        return { yrc: yrc, lrc: lrc, tr: ytlrc || tlrc, ytr: ytlrc, wordByWord: !!yrc };
+      }
+    }
+    /* 兜底：服务端版本旧、或这首确实没有逐字歌词时仍要出词（走行级） */
+    try {
+      const old = await NCM.get('/lyric', { id });
+      if (old && old.code === 200 && old.lrc && old.lrc.lyric) {
+        return { yrc: '', lrc: old.lrc.lyric, tr: (old.tlyric && old.tlyric.lyric) || '', ytr: '', wordByWord: false };
+      }
+    } catch (e) { console.warn('lyric fallback failed', e); }
+    return null;
   };
 
   /* 我喜欢的音乐（收藏） */

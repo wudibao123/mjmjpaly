@@ -253,6 +253,15 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 }
 .progress-wrapper:hover { opacity: 1; }
 .progress-wrapper.active { opacity: 1; }
+
+/* 译文只挂在进度条上方、贴着进度条；主歌词区不再出现译文行 */
+.progress-tr {
+  position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 12.5px; line-height: 1.35; font-weight: 500; color: rgba(255, 255, 255, 0.74);
+  text-align: center; pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  opacity: 0; transition: opacity 0.25s linear;
+}
 .time-label {
   font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.7);
   font-family: monospace; width: 45px; text-align: center; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
@@ -673,6 +682,17 @@ body[data-lyric-style]:not([data-lyric-style="liquid"]) canvas#c { opacity: 0; p
   will-change: clip-path;
 }
 .ly-fill > span { display: block; white-space: inherit; }
+
+/* 逐字高亮（yrc 真字级时间轴）：整行扫描关掉，改由每个字自己的 --wp 从左揭开。
+   逐字的字体、行宽与 .ly-base 完全一致，所以两层折行位置对得上。 */
+.ly-fill.w { clip-path: none; }
+/* 底层未唱文字与高亮层用同一套字盒，盒宽/基线一致，两层才能严丝合缝地重合 */
+.ly-base.w > .bw { display: inline-block; white-space: pre; }
+.ly-fill.w > .w {
+  display: inline-block; white-space: pre;
+  clip-path: inset(0 calc((1 - var(--wp, 0)) * 100%) 0 0);
+  will-change: clip-path;
+}
 
 /* 译文行：挂在主行下方，小字低透明度，不参与扫光 */
 .ly-tr {
@@ -1266,6 +1286,13 @@ body[data-lyric-style="chat"] .ly-bubble[data-rel="-4"],
 body[data-lyric-style="chat"] .ly-bubble[data-rel="-5"],
 body[data-lyric-style="chat"] .ly-bubble[data-rel="-6"] { opacity: 0.46; transform: scale(0.97); }
 body[data-lyric-style="chat"] .ly-bubble-body .ly-fill { display: none; }
+/* 对话样式：按每个字自己的起始时间“打”出来（yrc 字级时间戳），
+   没开口的字用 opacity 藏起来但保留占位，气泡宽度不会跟着跳。
+   没有逐字数据的老歌 --wv 未设置，默认 1，整句照旧一次性出现。 */
+body[data-lyric-style="chat"] .ly-bubble[data-rel="0"] .ly-base.w > .bw {
+  opacity: var(--wv, 1);
+  transition: opacity 80ms linear;
+}
 body[data-lyric-style="chat"] .ly-dots { display: flex; gap: 4px; padding: 10px 13px; background: rgba(255, 255, 255, 0.12); border-radius: 15px; }
 body[data-lyric-style="chat"] .ly-dots i {
   width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.75);

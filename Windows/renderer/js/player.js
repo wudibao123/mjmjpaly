@@ -83,8 +83,131 @@
     if (state.analyser && audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(function () {});
   }, 1000);
 
+  /* ================= 逐字歌词（yrc） =================
+     yrc 行格式：[行起始ms,行时长ms](字起始ms,字时长ms,0)字…(…)字…
+     每个字自带绝对起止时间，卡拉OK进度就按这个算，不做任何均分。
+     这就是 Folia 那种“周杰伦念白慢、高亮也跟着慢”的数据来源。 */
+  function parseYrcLines(text) {
+    const out = [];
+    (text || '').replace(/^\uFEFF/, '').split(/\r?\n/).forEach((line) => {
+      const m = /^\[(\d+),(\d+)\](.*)$/.exec(line);
+      if (!m) return;
+      const start = parseInt(m[1], 10) / 1000;
+      const dur = parseInt(m[2], 10) / 1000;
+      const words = [];
+      const re = /\((\d+),(\d+),(\d+)\)([^(]*)/g;
+      let w;
+      while ((w = re.exec(m[3])) !== null) {
+        const ws = parseInt(w[1], 10) / 1000;
+        const wd = parseInt(w[2], 10) / 1000;
+        const wt = w[4];
+        if (!wt) continue;
+        words.push({ text: wt, start: ws, end: ws + wd });
+      }
+      if (!words.length) return;
+      out.push({
+        time: start,
+        end: start + dur,
+        text: words.map(function (x) { return x.text; }).join(''),
+        tr: '',
+        words: words,
+      });
+    });
+    return out;
+  }
+
+  /* 间奏“准备唱”点阵：照抄 Folia src/utils/lyrics/parserCore.ts 的 attachInterludes。
+     正文 '......' 六个点，每个点各带 start/end（整段时长均分），所以点是逐点点亮的，
+     不是一张静态图片。规则：
+       首行前间隔 > 3s → 补一段 0.5 → (首行 - 0.5)
+       相邻两行间隔 > 3s → 插 (当前行结束 + 0.05) → (下一行开始 - 0.05) */
+  const INTERLUDE_TEXT = '......';
+
+  function lineEnd(line) {
+    if (line.words && line.words.length) return line.words[line.words.length - 1].end;
+    if (typeof line.end === 'number') return line.end;
+    return line.time;
+  }
+
+  // 只有行级 lrc 的行没有结束时间，按字数给一个保守时长，仅用于算“间奏间隙”，不参与逐字高亮
+  function estimateLrcEnd(line, next) {
+    const body = (line.text || '').replace(/\s/g, '');
+    const est = Math.max(1.2, body.length * 0.28);
+    const cap = next ? Math.max(est, next.time - line.time - 0.05) : est;
+    return line.time + Math.min(est, cap);
+  }
+
+  function attachInterludes(lines) {
+    if (!lines || !lines.length) return lines;
+    const out = [];
+    const makeInterlude = function (start, end) {
+      const dur = Math.max(0.2, end - start);
+      const step = dur / 6;
+      const words = [];
+      for (let i = 0; i < 6; i++) {
+        words.push({ text: '.', start: start + i * step, end: start + (i + 1) * step });
+      }
+      return { time: start, end: end, text: INTERLUDE_TEXT, tr: '', words: words };
+    };
+    if (lines[0].time > 3) out.push(makeInterlude(0.5, lines[0].time - 0.5));
+    for (let i = 0; i < lines.length; i++) {
+      out.push(lines[i]);
+      const next = lines[i + 1];
+      if (!next) continue;
+      const cur = lines[i];
+      const curEnd = (cur.words && cur.words.length) ? lineEnd(cur) : estimateLrcEnd(cur, next);
+      if (next.time - curEnd > 3) out.push(makeInterlude(curEnd + 0.05, next.time - 0.05));
+    }
+    return out;
+  }
+
+  /* 译文时间轴：同时认 yrc 的 [起始ms,时长ms] 和普通 lrc 的 [mm:ss.xx] */
+  function parseTimedText(text) {
+    const out = [];
+    (text || '').replace(/^\uFEFF/, '').split(/\r?\n/).forEach((line) => {
+      const y = /^\[(\d+),(\d+)\](.*)$/.exec(line);
+      if (y) {
+        const body = y[3].replace(/\(\d+,\d+,\d+\)/g, '').trim();
+        if (body) out.push({ time: parseInt(y[1], 10) / 1000, text: body });
+        return;
+      }
+      const l = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/.exec(line);
+      if (l) {
+        const body = l[4].trim();
+        if (body) {
+          out.push({
+            time: parseInt(l[1], 10) * 60 + parseInt(l[2], 10) +
+              (l[3].length === 2 ? parseInt(l[3], 10) * 10 : parseInt(l[3], 10)) / 1000,
+            text: body,
+          });
+        }
+      }
+    });
+    return out;
+  }
+
+  function attachTranslation(lines, trText) {
+    const trs = parseTimedText(trText);
+    if (!trs.length) return lines;
+    lines.forEach(function (line) {
+      for (let i = 0; i < trs.length; i++) {
+        if (Math.abs(trs[i].time - line.time) < 0.12) { line.tr = trs[i].text; break; }
+      }
+    });
+    return lines;
+  }
+
   function parseLyric(raw) {
-    const lines = (raw || '').split('\n');
+    // raw 可以是 {yrc,lrc,tr,ytr}（新逐字接口），也可以是纯 lrc 字符串（兜底）
+    const pack = (typeof raw === 'string') ? { yrc: '', lrc: raw, tr: '', ytr: '' } : (raw || {});
+    if (pack.yrc) {
+      const ylines = parseYrcLines(pack.yrc);
+      if (ylines.length) {
+        attachTranslation(ylines, pack.ytr || pack.tr);
+        return attachInterludes(ylines);
+      }
+    }
+    const lines = (pack.lrc || '').split('\n');
     const rows = [];
     const timeReg = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
     lines.forEach((line) => {
@@ -119,7 +242,8 @@
       }
       out.push({ time: row.time, text: row.text, tr: '' });
     });
-    return out;
+    attachTranslation(out, pack.tr);
+    return attachInterludes(out);
   }
 
   function buildPositions(lyrics) {

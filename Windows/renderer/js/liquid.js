@@ -286,6 +286,26 @@
   let currentHalfSize = { x: 180, y: 70 }, targetHalfSize = { x: 180, y: 70 };
   let pulseScale = 1.0;
   let draggingLyricIndex = -1, lyricDragOffset = { x: 0, y: 0 }, mouse = { x: 0, y: 0 };
+
+  /* 逐字进度：行里有 yrc 字级时间戳时按每个字自己的 start/end 累加（按字数加权，
+     和笔画宽度成比例），没有逐字数据才退回原来的行内均分。
+     玻璃里的卡拉OK、DOM 歌词层都用这一套，保证两边一致。 */
+  function lyricWordProgress(line, next, now) {
+    if (line && line.words && line.words.length) {
+      let done = 0, total = 0;
+      for (let i = 0; i < line.words.length; i++) {
+        const w = line.words[i];
+        const len = Math.max(1, (w.text || '').length);
+        total += len;
+        if (now >= w.end) done += len;
+        else if (now > w.start) done += len * (now - w.start) / Math.max(0.01, w.end - w.start);
+      }
+      return total ? Math.max(0, Math.min(1, done / total)) : 0;
+    }
+    const start = line ? line.time : 0;
+    const end = next ? next.time : start + 6;
+    return Math.max(0, Math.min(1, (now - start) / Math.max(0.25, end - start)));
+  }
   let walkerProgress = 0;
   let mouseVel = { x: 0, y: 0 };
   let bassSmooth = 0, energySmooth = 0;
@@ -468,9 +488,11 @@
       cCtx.textAlign = 'center'; cCtx.textBaseline = 'middle';
       st.walkerTextWidth = 0;
       if (st.currentLyricIndex !== -1) {
-        const startTime = st.lyricsData[st.currentLyricIndex].time;
-        const endTime = (st.lyricsData[st.currentLyricIndex + 1] ? st.lyricsData[st.currentLyricIndex + 1].time : startTime + 6);
-        walkerProgress = Math.max(0, Math.min(1, (st.audioEl.currentTime - startTime) / (endTime - startTime)));
+        walkerProgress = lyricWordProgress(
+          st.lyricsData[st.currentLyricIndex],
+          st.lyricsData[st.currentLyricIndex + 1],
+          st.audioEl.currentTime
+        );
       }
       st.lyricsData.forEach((item, index) => {
         if (index < st.currentLyricIndex - 5) return;

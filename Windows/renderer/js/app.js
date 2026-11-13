@@ -12,7 +12,16 @@
   const bgLayer = $('bg-layer');
   const island = $('dynamic-island');
   const plistPanel = $('playlist-panel');
+  /* 背景只保留三种场景：隐现（Folia latent）、丝绸（Mineradio SILK）、音域回响（Mineradio SONIC TOPOGRAPHY）。
+     其余场景卡片已从面板删除，旧存值在这里回退，避免重启后套用一个不存在的模式变成黑屏。 */
+  const SCENE_BG_MODES = ['fveil', 'mrp0', 'mrp7'];
+  const BG_ALLOWED = ['default', 'cover', 'aurora', 'custom', 'desktop'].concat(SCENE_BG_MODES);
+  /* 背景分组 ↔ 歌词样式分组：Folia 背景配 Folia 歌词，Mineradio 背景配 Mineradio 歌词 */
+  const FOLIA_LYRIC = ['still', 'flow', 'mind', 'terrace', 'float', 'monet', 'chorus', 'confide', 'loop', 'mirror', 'chrono', 'sonnet', 'pigment', 'veil'];
+  const MR_LYRIC = ['mrcinema', 'mrktv', 'mrglow', 'mrglitch', 'mrfloat', 'mrbilin'];
+  const MR_BG_MODES = ['mrp0', 'mrp7'];
   let bgMode = localStorage.getItem('mjmj.bgMode') || 'default';
+  if (BG_ALLOWED.indexOf(bgMode) < 0) bgMode = 'default';
   let customBgUrl = null;
   let coverBgUrl = '';      // 当前歌曲封面原图
   let coverBgApplied = '';  // 已送进玻璃的封面地址（去重）
@@ -171,6 +180,60 @@
     return Math.max(0, Math.min(1, (now - start) / Math.max(0.25, end - start)));
   }
 
+  /* 逐字高亮层：行里带真实字级时间戳就一字一个 .w（Folia / 网易云 yrc 的做法），
+     没有逐字数据时退回整行一个 span —— 绝不拿估算假装逐字。 */
+  function fillHtml(text, words) {
+    if (!words || !words.length) return '<span class="ly-fill"><span>' + text + '</span></span>';
+    let s = '<span class="ly-fill w">';
+    for (let i = 0; i < words.length; i++) {
+      s += '<span class="w" data-i="' + i + '">' + escLyric(words[i].text) + '</span>';
+    }
+    return s + '</span>';
+  }
+
+  /* 底层“未唱”文字也用同一套字盒（.bw），和 .ly-fill 的 .w 盒宽、基线完全一致。
+     以前底层是整行 inline 文本、上层是 inline-block 字盒，两套字距算法不同，
+     逐字拆分后偏移会逐字累积，同一句就被画成两份错开的字。 */
+  function baseHtml(text, words) {
+    if (!words || !words.length) return '<span class="ly-base">' + text + '</span>';
+    let s = '<span class="ly-base w">';
+    for (let i = 0; i < words.length; i++) {
+      s += '<span class="bw">' + escLyric(words[i].text) + '</span>';
+    }
+    return s + '</span>';
+  }
+
+  /* 每个字按自己的 start/end 推进；整行 --p 取字进度均值，
+     仅供读 --p 的玻璃/背景使用，歌词本体只认字级时间。 */
+  function applyLineProgress(lineEl, st, idx) {
+    if (!lineEl) return;
+    const cur = st.lyricsData[idx];
+    const now = st.audioEl ? st.audioEl.currentTime : 0;
+    const nodes = lineEl.querySelectorAll('.ly-fill.w > .w');
+    if (nodes.length && cur && cur.words && cur.words.length === nodes.length) {
+      const bnodes = lineEl.querySelectorAll('.ly-base.w > .bw');
+      let done = 0, total = 0;
+      for (let i = 0; i < nodes.length; i++) {
+        const w = cur.words[i];
+        const len = Math.max(1, (w.text || '').length);
+        let wp = 0;
+        if (now >= w.end) wp = 1;
+        else if (now > w.start) wp = (now - w.start) / Math.max(0.01, w.end - w.start);
+        nodes[i].style.setProperty('--wp', wp.toFixed(3));
+        /* 这个字“开口”没有：对话样式的流式打字只看 0/1，用字自己的起始时间，
+           不按整句时间插值，所以念白拖长时字就跟着一个个慢慢冒出来。 */
+        const wv = now >= w.start ? '1' : '0';
+        nodes[i].style.setProperty('--wv', wv);
+        if (bnodes.length === nodes.length) bnodes[i].style.setProperty('--wv', wv);
+        total += len;
+        done += len * wp;
+      }
+      lineEl.style.setProperty('--p', (total ? done / total : 0).toFixed(3));
+      return;
+    }
+    lineEl.style.setProperty('--p', lyricProgress(st, idx).toFixed(3));
+  }
+
   function renderCosmos(st, idx) {
     const SPAN = 14;
     const key = 'cosmos|' + idx;
@@ -193,9 +256,8 @@
         html += '<div class="ly-line" data-rel="' + d + '" data-depth="' + depth + '"'
           + ' style="--lx:' + p.x.toFixed(0) + 'px;--ly:' + p.y.toFixed(0) + 'px;--lz:' + p.z.toFixed(0) + 'px;'
           + '--lry:' + p.ry.toFixed(1) + 'deg;--lrx:' + p.rx.toFixed(1) + 'deg;font-size:' + fs + 'px;">'
-          + '<span class="ly-base">' + t + '</span>'
-          + '<span class="ly-fill"><span>' + t + '</span></span>'
-          + (tr ? '<span class="ly-tr">' + tr + '</span>' : '')
+          + baseHtml(t, st.lyricsData[i] && st.lyricsData[i].words)
+          + fillHtml(t, st.lyricsData[i] && st.lyricsData[i].words)
           + '</div>';
       }
       html += '</div>';
@@ -225,7 +287,7 @@
     document.body.style.setProperty('--bg-cam-z', (1 + Math.abs(cosmosCam.z) / 3400).toFixed(3));
 
     const curLine = lyricStage.querySelector('.ly-line[data-rel="0"]');
-    if (curLine) curLine.style.setProperty('--p', lyricProgress(st, idx).toFixed(3));
+    if (curLine) applyLineProgress(curLine, st, idx);
   }
 
   /* ===== 7 套 3D 空间排布（三轴坐标由行号推出，相机把当前行拉回原点） ===== */
@@ -360,9 +422,8 @@
         html += '<div class="ly-line" data-rel="' + d + '" data-depth="' + depth + '"'
           + ' style="--lx:' + p.x.toFixed(0) + 'px;--ly:' + p.y.toFixed(0) + 'px;--lz:' + lz.toFixed(0) + 'px;'
           + '--lry:' + pry.toFixed(1) + 'deg;--lrx:' + p.rx.toFixed(1) + 'deg;font-size:' + fs + 'px;">'
-          + '<span class="ly-base">' + t + '</span>'
-          + '<span class="ly-fill"><span>' + t + '</span></span>'
-          + (tr ? '<span class="ly-tr">' + tr + '</span>' : '')
+          + baseHtml(t, st.lyricsData[i] && st.lyricsData[i].words)
+          + fillHtml(t, st.lyricsData[i] && st.lyricsData[i].words)
           + '</div>';
       }
       html += '</div>';
@@ -376,7 +437,7 @@
     cosmosCam.inited = true;
 
     const curLine = lyricStage.querySelector('.ly-line[data-rel="0"]');
-    if (curLine) curLine.style.setProperty('--p', lyricProgress(st, idx).toFixed(3));
+    if (curLine) applyLineProgress(curLine, st, idx);
   }
 
   /* 右侧（自己）用网易云登录头像，未登录或左侧（对方）用默认头像 */
@@ -434,9 +495,8 @@
         const tr = st.lyricsData[i] && st.lyricsData[i].tr ? escLyric(st.lyricsData[i].tr) : '';
         bubbles += '<div class="ly-bubble" data-side="' + side + '" data-rel="' + d + '">'
           + bubbleAvatar(side)
-          + '<span class="ly-bubble-body"><span class="ly-base">' + t + '</span>'
-          + '<span class="ly-fill"><span>' + t + '</span></span>'
-          + (tr ? '<span class="ly-tr">' + tr + '</span>' : '')
+          + '<span class="ly-bubble-body">' + baseHtml(t, st.lyricsData[i] && st.lyricsData[i].words)
+          + fillHtml(t, st.lyricsData[i] && st.lyricsData[i].words)
           + '</span></div>';
       }
       if (idx + 1 < st.lyricsData.length) {
@@ -449,7 +509,7 @@
       if (lastSide) lyricStage.dataset.side = lastSide;
     }
     const cur = lyricStage.querySelector('.ly-bubble[data-rel="0"]');
-    if (cur) cur.style.setProperty('--p', lyricProgress(st, idx).toFixed(3));
+    if (cur) applyLineProgress(cur, st, idx);
     const now = st.audioEl ? st.audioEl.currentTime : 0;
     lyricStage.style.setProperty('--sway', (Math.sin(now * 0.5) * 2.2).toFixed(2) + 'deg');
     lyricStage.style.setProperty('--lift', (Math.sin(now * 0.8) * 0.35 - 0.15).toFixed(2));
@@ -495,6 +555,9 @@
   function applyLyricStyle(id) {
     lyricStyle = id;
     localStorage.setItem('mjmj.lyricStyle', id);
+    /* 记住每组最后一次选择：切背景分组时回到这一组自己的样式 */
+    if (FOLIA_LYRIC.indexOf(id) >= 0) localStorage.setItem('mjmj.foliaLyric', id);
+    if (MR_LYRIC.indexOf(id) >= 0) localStorage.setItem('mjmj.mrLyric', id);
     document.body.dataset.lyricStyle = id;
     if (id === 'cosmos' || SPACE_STYLES.indexOf(id) >= 0) document.body.dataset.space = '1';
     else delete document.body.dataset.space;
@@ -508,14 +571,26 @@
     renderLyricStyleCards();
   }
 
+  let lastTrText = null;
+  /* 译文只挂在进度条上方（#progressTr），主歌词区不再显示译文 */
+  function syncProgressTranslation(st, idx) {
+    const el = $('progressTr');
+    if (!el) return;
+    const cur = st.lyricsData && idx >= 0 ? st.lyricsData[idx] : null;
+    const tr = (cur && cur.tr) ? cur.tr : '';
+    if (tr !== lastTrText) { lastTrText = tr; el.textContent = tr; }
+    el.style.opacity = tr ? '1' : '0';
+  }
+
   function renderLyricStage() {
     if (!lyricStage) return;
     const st = Player.state;
     const empty = () => {
       if (lyricStageKey !== 'none') { lyricStage.innerHTML = ''; lyricStageKey = 'none'; }
     };
-    if (lyricStyle === 'liquid' || !st.lyricsData || !st.lyricsData.length) { empty(); return; }
     const idx = st.currentLyricIndex;
+    syncProgressTranslation(st, idx);
+    if (lyricStyle === 'liquid' || !st.lyricsData || !st.lyricsData.length) { empty(); return; }
     if (idx < 0 || idx >= st.lyricsData.length) { empty(); return; }
     if (lyricStyle === 'cosmos') { renderCosmos(st, idx); return; }
     if (SPACE_STYLES.indexOf(lyricStyle) >= 0) { renderSpace(st, idx, lyricStyle); return; }
@@ -533,23 +608,17 @@
         const t = escLyric(text);
         const tr = st.lyricsData[i] && st.lyricsData[i].tr ? escLyric(st.lyricsData[i].tr) : '';
         html += '<div class="ly-line' + blank + '" data-rel="' + d + '">'
-          + '<span class="ly-base">' + t + '</span>'
-          + '<span class="ly-fill"><span>' + t + '</span></span>'
-          + (tr ? '<span class="ly-tr">' + tr + '</span>' : '')
+          + baseHtml(t, st.lyricsData[i] && st.lyricsData[i].words)
+          + fillHtml(t, st.lyricsData[i] && st.lyricsData[i].words)
           + '</div>';
       }
       html += '</div>';
       lyricStage.innerHTML = html;
     }
 
-    const cur = st.lyricsData[idx];
-    const next = st.lyricsData[idx + 1];
     const now = st.audioEl ? st.audioEl.currentTime : 0;
-    const start = cur ? cur.time : 0;
-    const end = next ? next.time : start + 6;
-    const p = Math.max(0, Math.min(1, (now - start) / Math.max(0.25, end - start)));
     const curLine = lyricStage.querySelector('.ly-line[data-rel="0"]');
-    if (curLine) curLine.style.setProperty('--p', p.toFixed(3));
+    applyLineProgress(curLine, st, idx);
 
     // 3D 相机量：crawl 的后撤、dolly 的推轨、orbit 的绕行、holo 的轻微摆动共用
     const cam = (now % 14) / 14;
@@ -791,6 +860,12 @@
     if (bgMode === 'aurora') {
       // 节奏流下玻璃程序化背景与 CSS 极光同色系（由 --hue 驱动）
     }
+    /* 背景分组决定歌词分组：隐现配 Folia 歌词，丝绸/音域回响配 Mineradio 歌词 */
+    if (bgMode === 'fveil' && MR_LYRIC.indexOf(lyricStyle) >= 0) {
+      applyLyricStyle(localStorage.getItem('mjmj.foliaLyric') || 'veil');
+    } else if (MR_BG_MODES.indexOf(bgMode) >= 0 && FOLIA_LYRIC.indexOf(lyricStyle) >= 0) {
+      applyLyricStyle(localStorage.getItem('mjmj.mrLyric') || 'mrcinema');
+    }
   }
   document.querySelectorAll('.bg-mode').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -851,7 +926,7 @@
   (function restoreBgPrefs() {
     try {
       const m = localStorage.getItem('mjmj.bgMode');
-      if (m && m !== 'custom') bgMode = m;
+      if (m && m !== 'custom') bgMode = BG_ALLOWED.indexOf(m) >= 0 ? m : 'default';
       const b = localStorage.getItem('mjmj.bgBlur');
       if (b !== null) {
         bgBlur.value = b;
