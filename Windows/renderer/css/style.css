@@ -1311,7 +1311,10 @@ body[data-lyric-style="chat"] .ly-dots i:nth-child(3) { animation-delay: 0.32s; 
 
 /* 手机端：机身按窄屏收一号，下移量减半，避免顶到下方 HUD */
 body.mobile[data-lyric-style="chat"] .ly-phone3d {
-  --pw: min(60vw, 268px); --ph: min(56vh, 520px);
+  /* 只按高度定尺，宽度由 19.5:9 反算。以前宽度和高度各自 min() 取，
+     视口一变矮两者就会接近，机身被压成方块，看着像手表。 */
+  --ph: min(56vh, 520px);
+  --pw: calc(var(--ph) * 0.462);
 }
 body.mobile[data-lyric-style="chat"] .ly-chat-list { padding: 10px 12px 20px; gap: 8px; }
 
